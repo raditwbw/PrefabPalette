@@ -1,6 +1,8 @@
 # **PrefabPalette**
 This tool provides you with a handy tool for building scenes in Unity, as an alternative to dragging prefabs into your scene one-by-one.
 
+Update to Unity 2019.4.8f1.
+
 ### **Creating a Palette**
 
 First, you create a `PrefabPalette`, which is a group of objects that you will be able to place into the scene.
