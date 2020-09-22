@@ -30,7 +30,7 @@ public class PrefabPaletteWindow : EditorWindow
         RandomXYZ
     }
 
-    PrefabPalette palette;
+    [SerializeField] PrefabPalette palette;
     GameObject selected;
     Vector2 prefabScroll;
 
@@ -42,36 +42,39 @@ public class PrefabPaletteWindow : EditorWindow
     Vector3 placePos;
     Vector3 placeNor;
 
-    bool optionsToggle = true;
+    [SerializeField] bool optionsToggle = true;
 
-    int raycastMask;
-    Transform parentTo;
-    bool onlyUpwards;
+    [SerializeField] int raycastMask;
+    [SerializeField] Transform parentTo;
+    [SerializeField] bool onlyUpwards = true;
 
-    bool snap;
-    float snapValue = 1f;
+    [SerializeField] bool snap;
+    [SerializeField] float snapValue = 1f;
 
-    RotationType rotationMode;
-    Vector3 customRotation;
-    Vector3 minRotation;
-    Vector3 maxRotation;
+    [SerializeField] RotationType rotationMode;
+    [SerializeField] Vector3 customRotation;
+    [SerializeField] Vector3 minRotation;
+    [SerializeField] Vector3 maxRotation;
 
-    ScaleType scaleMode;
-    Vector3 customScale = Vector3.one;
-    Vector3 minScale = Vector3.one;
-    Vector3 maxScale = Vector3.one;
-    float minScaleU = 1f;
-    float maxScaleU = 1f;
+    [SerializeField] ScaleType scaleMode;
+    [SerializeField] Vector3 customScale = Vector3.one;
+    [SerializeField] Vector3 minScale = Vector3.one;
+    [SerializeField] Vector3 maxScale = Vector3.one;
+    [SerializeField] float minScaleU = 1f;
+    [SerializeField] float maxScaleU = 1f;
+
+    [SerializeField] float incRot = 0;
+    bool updateRot = false;
 
     void OnEnable()
     {
-        SceneView.onSceneGUIDelegate -= OnSceneGUI;
-        SceneView.onSceneGUIDelegate += OnSceneGUI;
+        SceneView.duringSceneGui -= OnSceneGUI;
+        SceneView.duringSceneGui += OnSceneGUI;
 
         Undo.undoRedoPerformed -= Repaint;
         Undo.undoRedoPerformed += Repaint;
 
-        raycastMask = 1;
+        //raycastMask = 1;
 
         wantsMouseMove = true;
         wantsMouseEnterLeaveWindow = true;
@@ -80,7 +83,8 @@ public class PrefabPaletteWindow : EditorWindow
 
     void OnDisable()
     {
-        SceneView.onSceneGUIDelegate -= OnSceneGUI;
+        //SceneView.onSceneGUIDelegate -= OnSceneGUI;
+        SceneView.duringSceneGui -= OnSceneGUI;
         Undo.undoRedoPerformed -= Repaint;
     }
 
@@ -108,7 +112,7 @@ public class PrefabPaletteWindow : EditorWindow
         paletteNames = new string[palettes.Count];
         for (int i = 0; i < palettes.Count; ++i)
             paletteNames[i] = palettes[i].name;
-        
+
         if (palette != null && !palettes.Contains(palette))
             palette = null;
 
@@ -118,9 +122,11 @@ public class PrefabPaletteWindow : EditorWindow
 
     void Deselect()
     {
-        EditorApplication.delayCall += () => {
+        EditorApplication.delayCall += () =>
+        {
             selected = null;
             Repaint();
+            incRot = 0;
         };
     }
 
@@ -134,7 +140,7 @@ public class PrefabPaletteWindow : EditorWindow
 
         if (palette == null)
             return;
-            
+
         if (ev.isMouse)
         {
             mousePos = ev.mousePosition;
@@ -152,7 +158,7 @@ public class PrefabPaletteWindow : EditorWindow
 
             var par = EditorGUILayout.ObjectField("Parent To", parentTo, typeof(Transform), true) as Transform;
             if (par != parentTo)
-                if (par == null || (PrefabUtility.GetCorrespondingObjectFromSource(par) == null && PrefabUtility.GetPrefabObject(par) == null))
+                if (par == null || (PrefabUtility.GetCorrespondingObjectFromSource(par) == null && PrefabUtility.GetPrefabInstanceHandle(par) == null))
                     parentTo = par;
 
             onlyUpwards = EditorGUILayout.Toggle("Only Up Normals", onlyUpwards);
@@ -206,15 +212,52 @@ public class PrefabPaletteWindow : EditorWindow
 
         GUILayout.Space(2f);
 
+        var buttonHeight = EditorGUIUtility.singleLineHeight * 3f;
+        var heightStyle = GUILayout.Height(buttonHeight);
+
         GUI.enabled = selected != null;
-        if (GUILayout.Button("Stop Placement (ESC)", EditorStyles.miniButton))
+
+        EditorGUILayout.BeginHorizontal();
+        bool stop = GUILayout.Button("Stop Placement (ESC)", heightStyle);
+        bool rotateAC = false;
+        bool rotateC = false;
+        if (rotationMode == RotationType.Prefab)
+        {
+            rotateAC = GUILayout.Button("Rotate ↺ (3)", heightStyle);
+            rotateC = GUILayout.Button("Rotate ↻ (4)", heightStyle);
+        }
+        EditorGUILayout.EndHorizontal();
+
+        if (stop)
             Deselect();
         GUI.enabled = true;
-        if (ev.type == EventType.KeyDown && ev.keyCode == KeyCode.Escape)
-            Deselect();
-            
-        var buttonHeight = EditorGUIUtility.singleLineHeight * 2f;
-        var heightStyle = GUILayout.Height(buttonHeight);
+        if (ev.type == EventType.KeyDown)
+        {
+            switch (ev.keyCode)
+            {
+                case KeyCode.Escape:
+                    Deselect();
+                    break;
+                case KeyCode.Alpha3:
+                    RotateClockwise();
+                    break;
+                case KeyCode.Alpha4:
+                    RotateAntiClockwise();
+                    break;
+            }
+        }
+        if (selected != null)
+        {
+            if (rotateAC)
+            {
+                RotateClockwise();
+            }
+
+            if (rotateC)
+            {
+                RotateAntiClockwise();
+            }
+        }
 
         var lastRect = GUILayoutUtility.GetLastRect();
         var scrollMouse = mousePos;
@@ -237,7 +280,21 @@ public class PrefabPaletteWindow : EditorWindow
             bgRect.height += 2f;
             if (prefab == selected)
             {
+                EditorGUIUtility.AddCursorRect(bgRect, MouseCursor.Link);
+
                 EditorGUI.DrawRect(bgRect, new Color32(0x42, 0x80, 0xe4, 0xff));
+                if (bgRect.Contains(scrollMouse))
+                {
+                    if (ev.type == EventType.MouseDown)
+                    {
+                        EditorApplication.delayCall += () =>
+                        {
+                            selected = null;
+                            incRot = 0;
+                            Repaint();
+                        };
+                    }
+                }
             }
             else
             {
@@ -251,6 +308,7 @@ public class PrefabPaletteWindow : EditorWindow
                         EditorApplication.delayCall += () =>
                         {
                             selected = prefab;
+                            incRot = selected.transform.eulerAngles.y;
                             SceneView.RepaintAll();
                         };
                     }
@@ -281,6 +339,20 @@ public class PrefabPaletteWindow : EditorWindow
             Repaint();
     }
 
+    private void RotateClockwise()
+    {
+        incRot += 90;
+        if (incRot >= 360) incRot = 0;
+        updateRot = true;
+    }
+
+    private void RotateAntiClockwise()
+    {
+        incRot -= 90;
+        if (incRot <= 0) incRot = 360;
+        updateRot = true;
+    }
+
     void OnSceneGUI(SceneView view)
     {
         view.wantsMouseMove = true;
@@ -296,17 +368,32 @@ public class PrefabPaletteWindow : EditorWindow
 
         HandleUtility.Repaint();
 
-        if (ev.type == EventType.KeyDown && ev.keyCode == KeyCode.Escape)
-            Deselect();
+        if (ev.type == EventType.KeyDown)
+        {
+            switch (ev.keyCode)
+            {
+                case KeyCode.Escape:
+                    Deselect();
+                    break;
+                case KeyCode.Alpha3:
+                    RotateClockwise();
+                    break;
+                case KeyCode.Alpha4:
+                    RotateAntiClockwise();
+                    break;
+            }
+        }
 
         if (ev.isMouse)
             mousePos = ev.mousePosition;
-            
+
+
         if (ev.type == EventType.MouseLeaveWindow)
             ClearPlacingObj();
         else if (ev.isMouse || ev.type == EventType.MouseEnterWindow)
             UpdatePlacingObj();
 
+        if (updateRot) UpdatePlacingObj();
         switch (ev.type)
         {
             case EventType.Layout:
@@ -344,6 +431,8 @@ public class PrefabPaletteWindow : EditorWindow
         GUI.Label(r, "Z: " + placePos.z.ToString("0.00"), EditorStyles.whiteBoldLabel);
         GUILayout.EndArea();
         Handles.EndGUI();
+
+        updateRot = false;
     }
 
     void ClearPlacingObj()
@@ -421,7 +510,12 @@ public class PrefabPaletteWindow : EditorWindow
         if (rotationMode == RotationType.Custom)
             rot *= Quaternion.Euler(customRotation);
         else
-            rot *= selected.transform.localRotation;
+        {
+            var rotTemp = selected.transform.localRotation.eulerAngles;
+            //Debug.Log(incRot);
+            rotTemp.y = incRot;
+            rot *= Quaternion.Euler(rotTemp);
+        }
 
         placingObj.transform.localPosition = placePos;
         placingObj.transform.localRotation = rot;

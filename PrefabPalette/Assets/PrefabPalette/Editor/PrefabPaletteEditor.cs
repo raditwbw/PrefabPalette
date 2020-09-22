@@ -10,6 +10,11 @@ public class PrefabPaletteEditor : Editor
 {
     static string prevFolder = "Assets";
 
+    public PrefabPalette palette
+    {
+        get { return (PrefabPalette)target; }
+    }
+
     public override void OnInspectorGUI()
     {
         EditorGUI.BeginChangeCheck();
@@ -19,6 +24,8 @@ public class PrefabPaletteEditor : Editor
 
         EditorGUILayout.BeginHorizontal();
         GUILayout.FlexibleSpace();
+
+        if (palette.prefabs == null) palette.prefabs = new GameObject[0];
 
         var prefabs = new List<GameObject>(palette.prefabs);
         for (int i = 0; i < prefabs.Count - 1; ++i)
@@ -95,8 +102,4 @@ public class PrefabPaletteEditor : Editor
         }
     }
 
-    PrefabPalette palette
-    {
-        get { return (PrefabPalette)target; }
-    }
 }
