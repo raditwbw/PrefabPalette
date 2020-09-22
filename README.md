@@ -17,7 +17,7 @@ Once you've had a palette, you want to open the PrefabPalette window.
 
 > **Window ➞ Prefab Palette**
 
-![](Images/palette_window.png)
+![](Images/palette_window_update.png)
 
 From here, you can select which palette you want to use, and which object you want to place in the scene.
 
